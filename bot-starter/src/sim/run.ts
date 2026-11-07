@@ -257,9 +257,11 @@ export function runParallel(argv: string[], total: number, n: number): Promise<S
         );
         let out = "";
         child.stdout.on("data", (d) => (out += d));
-        child.on("exit", (code) =>
-          code === 0 ? resolve(JSON.parse(out)) : reject(new Error(`worker exited ${code}`)),
-        );
+        child.on("exit", (code) => {
+          if (code !== 0) return reject(new Error(`worker exited ${code}`));
+          if (!out.trim()) return reject(new Error("worker printed nothing (did run.ts start as a script?)"));
+          resolve(JSON.parse(out));
+        });
       }),
     );
   }
@@ -270,7 +272,21 @@ export function runParallel(argv: string[], total: number, n: number): Promise<S
   });
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// Run as a script, not imported (cmaes.ts imports runParallel)? Compare real
+// paths: on a cluster the same file can be reached through a symlink
+// (/lustre/work/... and its target), and a plain comparison would make the
+// script silently do nothing.
+function realOrSelf(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+const isMain =
+  process.argv[1] !== undefined &&
+  (realOrSelf(process.argv[1]) === realOrSelf(fileURLToPath(import.meta.url)) ||
+    path.basename(process.argv[1]).replace(/\.[cm]?[jt]s$/, "") === "run");
 if (isMain) {
   if (process.argv.includes("--worker")) {
     const first = Number(arg("first", "0"));
