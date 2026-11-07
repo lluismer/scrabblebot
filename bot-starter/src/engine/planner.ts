@@ -55,6 +55,19 @@ export interface Params {
   // bigger table, where the tile may go to anyone.
   denial1: number;
   denialN: number;
+  // Plan as a committed buyer: in rollouts, assume at least this chance of
+  // winning each future tile. The 3× bonus for 7+ letters makes a tile worth
+  // far more in a rack that will grow; planning only from today's (often
+  // near-zero) win chances locks the bot into small racks and short words.
+  winFloor: number;
+  // Shortest word worth cashing in before the last auction.
+  minPlayLen: number;
+  // Words pay their score in coins too, so a tile bought for p that adds v
+  // points costs v − p coins net once it's played. With recycle = 1 the
+  // budget limits that net loss (spend − value bought ≤ balance); with 0
+  // it limits gross spending. Tiles bought below their value pay for
+  // themselves.
+  recycle: number;
 }
 
 export const DEFAULT_PARAMS: Params = {
@@ -69,6 +82,9 @@ export const DEFAULT_PARAMS: Params = {
   sideShare: 0.25,
   denial1: 1,
   denialN: 0.25,
+  winFloor: 0,
+  minPlayLen: 2,
+  recycle: 0,
 };
 
 export interface MatchView {
@@ -155,7 +171,7 @@ export class Planner {
         if (!t || m.unseen[i]! === 0) continue;
         const o = t.optimal(m.dv[i]!, lambda, coins);
         const w = m.unseen[i]! / poolSize;
-        spend += w * o.expectedPay;
+        spend += w * (o.expectedPay - this.params.recycle * Math.max(0, m.dv[i]!) * o.winProb);
         gain += w * m.dv[i]! * o.winProb;
       }
       return { spend: m.future * spend, gain: m.future * gain };
@@ -214,7 +230,7 @@ export class Planner {
     for (let d = 0; d < draws; d++) {
       const x = swap(d);
       if (d >= usable) continue;
-      if (this.rng() < this.winProb[x]!) mine[x]!++;
+      if (this.rng() < Math.max(this.winProb[x]!, this.params.winFloor)) mine[x]!++;
       else if (withRival && this.rng() < share) theirs[x]!++;
     }
     if (withRival && view.rival) {
@@ -315,11 +331,16 @@ export class Planner {
         if (!t || view.unseen[i]! === 0) continue;
         const o = t.optimal(dv[i]!, lambda, view.balance);
         if (setWin) this.winProb[i] = o.winProb;
-        perAuction += (view.unseen[i]! / poolSize) * o.expectedPay;
+        perAuction +=
+          (view.unseen[i]! / poolSize) *
+          (o.expectedPay - this.params.recycle * Math.max(0, dv[i]!) * o.winProb);
       }
       const cur = tables[current];
       const now = cur ? cur.optimal(dv[current]!, lambda, view.balance) : null;
-      return future * perAuction + (now?.expectedPay ?? 0);
+      const nowNet = now
+        ? now.expectedPay - this.params.recycle * Math.max(0, dv[current]!) * now.winProb
+        : 0;
+      return future * perAuction + nowNet;
     };
 
     let lambda: number;
@@ -389,8 +410,11 @@ export class Planner {
     // Coins are only worth something while there are auctions left to
     // spend them in (the last one's tile is useless).
     if (view.bagTotal <= 1) return { words: [], why: "no auctions left to spend in" };
-    const candidates = this.lex.topWords(view.rack, 6);
-    if (candidates.length === 0) return { words: [], why: "no words" };
+    const candidates = this.lex
+      .topWords(view.rack, 12)
+      .filter((c) => c.word.length >= this.params.minPlayLen)
+      .slice(0, 6);
+    if (candidates.length === 0) return { words: [], why: "no words long enough" };
 
     // Common random numbers: the same futures for every candidate.
     const start = performance.now();
