@@ -1,0 +1,245 @@
+{
+  "source": "npm run observe, maincloud, 2026-11-07; real bots with 300+ matches, 200+ winning bids and 3+ real opponents per match on average, best average place first",
+  "rivals": [
+    {
+      "name": "Bron",
+      "matches": 14684,
+      "avgPlace": 2.3,
+      "avgScore": 136.1,
+      "bid": {
+        "slope": 2.107,
+        "intercept": 9.15,
+        "sd": 9.64,
+        "samples": 322405
+      },
+      "avgWordLength": 6.17,
+      "lettersWonPerMatch": 22,
+      "avgPaid": 8.32
+    },
+    {
+      "name": "Nijello",
+      "matches": 1565,
+      "avgPlace": 2.33,
+      "avgScore": 92.3,
+      "bid": {
+        "slope": 2.997,
+        "intercept": 10.73,
+        "sd": 5.94,
+        "samples": 20147
+      },
+      "avgWordLength": 5.62,
+      "lettersWonPerMatch": 12.9,
+      "avgPaid": 13.54
+    },
+    {
+      "name": "Chinese Dante",
+      "matches": 1263,
+      "avgPlace": 2.35,
+      "avgScore": 92.2,
+      "bid": {
+        "slope": 3.359,
+        "intercept": 10.77,
+        "sd": 5.34,
+        "samples": 15609
+      },
+      "avgWordLength": 5.91,
+      "lettersWonPerMatch": 12.4,
+      "avgPaid": 13.87
+    },
+    {
+      "name": "Lambi Lambiii",
+      "matches": 768,
+      "avgPlace": 2.38,
+      "avgScore": 90.9,
+      "bid": {
+        "slope": 3.754,
+        "intercept": 10.53,
+        "sd": 5.26,
+        "samples": 9625
+      },
+      "avgWordLength": 5.4,
+      "lettersWonPerMatch": 12.5,
+      "avgPaid": 14.37
+    },
+    {
+      "name": "Calebot",
+      "matches": 2008,
+      "avgPlace": 2.43,
+      "avgScore": 90.2,
+      "bid": {
+        "slope": 3.624,
+        "intercept": 10.34,
+        "sd": 5.5,
+        "samples": 25980
+      },
+      "avgWordLength": 5.69,
+      "lettersWonPerMatch": 12.9,
+      "avgPaid": 13.71
+    },
+    {
+      "name": "Lionel",
+      "matches": 9045,
+      "avgPlace": 2.47,
+      "avgScore": 98.5,
+      "bid": {
+        "slope": 3.28,
+        "intercept": 9.86,
+        "sd": 5.59,
+        "samples": 132630
+      },
+      "avgWordLength": 5.72,
+      "lettersWonPerMatch": 14.7,
+      "avgPaid": 12.65
+    },
+    {
+      "name": "LUCENT",
+      "matches": 5878,
+      "avgPlace": 2.48,
+      "avgScore": 115.5,
+      "bid": {
+        "slope": 2.981,
+        "intercept": 9.63,
+        "sd": 7.18,
+        "samples": 104137
+      },
+      "avgWordLength": 6.14,
+      "lettersWonPerMatch": 17.7,
+      "avgPaid": 10.45
+    },
+    {
+      "name": "Lala",
+      "matches": 4698,
+      "avgPlace": 2.5,
+      "avgScore": 100.5,
+      "bid": {
+        "slope": 3.559,
+        "intercept": 7.7,
+        "sd": 3.53,
+        "samples": 75746
+      },
+      "avgWordLength": 6,
+      "lettersWonPerMatch": 16.1,
+      "avgPaid": 11.32
+    },
+    {
+      "name": "postturing",
+      "matches": 1088,
+      "avgPlace": 2.5,
+      "avgScore": 90.1,
+      "bid": {
+        "slope": 2.213,
+        "intercept": 10.31,
+        "sd": 3.68,
+        "samples": 15802
+      },
+      "avgWordLength": 5.98,
+      "lettersWonPerMatch": 14.5,
+      "avgPaid": 11.8
+    },
+    {
+      "name": "Metheny",
+      "matches": 632,
+      "avgPlace": 2.54,
+      "avgScore": 88.3,
+      "bid": {
+        "slope": 3.954,
+        "intercept": 9.3,
+        "sd": 4.9,
+        "samples": 7706
+      },
+      "avgWordLength": 5.85,
+      "lettersWonPerMatch": 12.2,
+      "avgPaid": 13.89
+    },
+    {
+      "name": "Doppio",
+      "matches": 855,
+      "avgPlace": 2.57,
+      "avgScore": 89.4,
+      "bid": {
+        "slope": 2.839,
+        "intercept": 12.34,
+        "sd": 6.53,
+        "samples": 10759
+      },
+      "avgWordLength": 5.67,
+      "lettersWonPerMatch": 12.6,
+      "avgPaid": 13.81
+    },
+    {
+      "name": "Karthik",
+      "matches": 1854,
+      "avgPlace": 2.62,
+      "avgScore": 87.1,
+      "bid": {
+        "slope": 3.402,
+        "intercept": 10.43,
+        "sd": 4.87,
+        "samples": 22526
+      },
+      "avgWordLength": 5.71,
+      "lettersWonPerMatch": 12.1,
+      "avgPaid": 14.02
+    },
+    {
+      "name": "ramsay",
+      "matches": 405,
+      "avgPlace": 2.8,
+      "avgScore": 82.6,
+      "bid": {
+        "slope": 3.467,
+        "intercept": 11.14,
+        "sd": 4.84,
+        "samples": 5115
+      },
+      "avgWordLength": 5.55,
+      "lettersWonPerMatch": 12.6,
+      "avgPaid": 13.59
+    },
+    {
+      "name": "maverick-bot",
+      "matches": 8243,
+      "avgPlace": 2.89,
+      "avgScore": 104.6,
+      "bid": {
+        "slope": 2.8,
+        "intercept": 11.9,
+        "sd": 10.17,
+        "samples": 132953
+      },
+      "avgWordLength": 5.95,
+      "lettersWonPerMatch": 16.1,
+      "avgPaid": 11.22
+    },
+    {
+      "name": "guesser",
+      "matches": 1621,
+      "avgPlace": 2.92,
+      "avgScore": 82.8,
+      "bid": {
+        "slope": 3.02,
+        "intercept": 10.26,
+        "sd": 3.97,
+        "samples": 21077
+      },
+      "avgWordLength": 5.74,
+      "lettersWonPerMatch": 13,
+      "avgPaid": 12.96
+    },
+    {
+      "name": "wordchoice",
+      "matches": 2094,
+      "avgPlace": 2.96,
+      "avgScore": 81,
+      "bid": {
+        "slope": 2.91,
+        "intercept": 11.11,
+        "sd": 5.79,
+        "samples": 25976
+      },
+      "avgWordLength": 5.97,
+      "lettersWonPerMatch": 12.4,
+      "avgPaid": 12.81
+    }
+  ]
+}
