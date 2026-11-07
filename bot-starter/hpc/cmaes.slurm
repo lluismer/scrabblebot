@@ -35,6 +35,13 @@ eval "$(conda shell.bash hook)" && conda activate node20
 
 set -euo pipefail
 
+# tsx is a dev dependency; an npm set up for production skips it, and every
+# task would fail with "tsx: command not found".
+if [ ! -x node_modules/.bin/tsx ]; then
+  echo "node_modules/.bin/tsx is missing: run npm ci --include=dev on the login node" >&2
+  exit 1
+fi
+
 OBJECTIVE=${OBJECTIVE:-mix}
 MATCHES=${MATCHES:-200}
 FINAL_MATCHES=${FINAL_MATCHES:-48}

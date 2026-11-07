@@ -36,7 +36,7 @@ learning), wired up in `src/index.ts`.
 ## Run the bot
 
 ```bash
-npm install && npm run generate
+npm install --include=dev && npm run generate
 BOT_NAME=<name> BOT_TOKEN=<token from /team> npm start
 # tournament:
 BOT_NAME=<name> TOURNAMENT_ID=<id> npm start

@@ -11,7 +11,7 @@
 #   table  a variant + 5 default copies: a Swiss table (the default)
 #   final  a variant vs 1 default: the two-bot final
 #
-#   cd bot-starter && npm ci
+#   cd bot-starter && npm ci --include=dev
 #   mkdir -p logs        # SLURM opens logs/ before this script runs
 #   sbatch --array=0 --export=ALL,MATCHES_PER_TASK=1,SAMPLES=4 hpc/sweep.slurm   # smoke test
 #   sbatch --array=0-159 hpc/sweep.slurm                       # Swiss tables
@@ -40,6 +40,13 @@
 eval "$(conda shell.bash hook)" && conda activate node20
 
 set -euo pipefail
+
+# tsx is a dev dependency; an npm set up for production skips it, and every
+# task would fail with "tsx: command not found".
+if [ ! -x node_modules/.bin/tsx ]; then
+  echo "node_modules/.bin/tsx is missing: run npm ci --include=dev on the login node" >&2
+  exit 1
+fi
 
 # Centred on the local duels (128 matches each, vs defaults earnFactor 0.3,
 # lambdaFloor 0, playMargin 0): playMargin=3 won 63% vs 39%,
