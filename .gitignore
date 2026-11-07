@@ -10,3 +10,8 @@ target/
 bot-starter/src/module_bindings/
 .vercel
 .env*
+
+# strategy-C simulation output
+bot-starter/results/
+bot-starter/logs/
+bot-starter/data/
