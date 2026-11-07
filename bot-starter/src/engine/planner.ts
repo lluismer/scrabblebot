@@ -68,6 +68,10 @@ export interface Params {
   // it limits gross spending. Tiles bought below their value pay for
   // themselves.
   recycle: number;
+  // lambdaFloor fades out linearly over this many final auctions: money
+  // left at the end is worth nothing, so the cap on bids must not outlast
+  // the auctions it could still be spent in.
+  floorTaper: number;
 }
 
 export const DEFAULT_PARAMS: Params = {
@@ -85,6 +89,7 @@ export const DEFAULT_PARAMS: Params = {
   winFloor: 0,
   minPlayLen: 2,
   recycle: 0,
+  floorTaper: 20,
 };
 
 export interface MatchView {
@@ -357,7 +362,8 @@ export class Planner {
       }
       lambda = hi;
     }
-    lambda = Math.max(lambda, future > 0 ? this.params.lambdaFloor : 0);
+    const taper = this.params.floorTaper > 0 ? Math.min(1, future / this.params.floorTaper) : 1;
+    lambda = Math.max(lambda, future > 0 ? this.params.lambdaFloor * taper : 0);
     if (poolSize > 0) spendAt(lambda, true);
     return lambda;
   }

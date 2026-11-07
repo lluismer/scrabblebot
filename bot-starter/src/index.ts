@@ -23,6 +23,7 @@
 
 import {
   DbConnection,
+  tables,
   type EventContext,
   type ErrorContext,
 } from "./module_bindings/index.js";
@@ -147,31 +148,82 @@ function isRealBot(conn: DbConnection, botId: bigint): boolean {
   return b != null && !b.isSimulated;
 }
 
-// Fit the real opponents' bid models from the whole public archive, once
-// at startup; after that each new archive row is added as it arrives.
-//
-// find() scans whole tables, so join the archive to the results with maps
-// built in one pass each: the real bots, then the auctions they won.
-function relearn(conn: DbConnection) {
-  const t0 = performance.now();
-  const real = new Set<bigint>();
-  for (const b of conn.db.bot.iter()) {
-    if (!b.isSimulated && b.id !== myBotId) real.add(b.id);
+// Seed the real opponents' bid models from the profiles `npm run observe`
+// saved (data/rivals.json, else the snapshot in hpc/rivals.json). The bot
+// no longer downloads the server's whole history to fit them itself: that
+// took minutes and froze it long enough for the server to drop it. Each
+// match it plays then adds what it sees.
+function seedRivals(conn: DbConnection) {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const files = [path.join(here, "..", "data", "rivals.json"), path.join(here, "..", "hpc", "rivals.json")];
+  const file = files.find((f) => fs.existsSync(f));
+  if (!file) {
+    console.log(`[${BOT_NAME}] no rivals.json; real rivals start from the default model`);
+    return;
   }
-  const realWins = new Map<bigint, { letter: string; winnerBotId: bigint }>();
-  for (const r of conn.db.auctionResult.iter()) {
-    if (r.winnerBotId !== undefined && real.has(r.winnerBotId)) {
-      realWins.set(r.auctionId, { letter: r.letter, winnerBotId: r.winnerBotId });
-    }
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const list: { name: string; bidModel?: Model; bid?: Model }[] = Array.isArray(raw) ? raw : raw.rivals;
+  type Model = { slope: number; intercept: number; sd: number; samples?: number };
+  const byName = new Map<string, bigint>();
+  for (const b of conn.db.bot.iter()) byName.set(b.name, b.id);
+  let n = 0;
+  for (const r of list) {
+    const m = r.bidModel ?? r.bid;
+    const id = byName.get(r.name);
+    if (!m || id === undefined || id === myBotId) continue;
+    book.seed(id, { slope: m.slope, intercept: m.intercept, sd: m.sd, n: m.samples ?? 0 });
+    n++;
   }
-  book.rebuild(
-    conn.db.auctionTopBidArchive.iter(),
-    (id) => realWins.get(id),
-    (id) => real.has(id),
-  );
-  console.log(
-    `[${BOT_NAME}] fitted rival bid models (${(performance.now() - t0).toFixed(0)}ms)`,
-  );
+  console.log(`[${BOT_NAME}] seeded ${n} rival bid models from ${path.relative(process.cwd(), file)}`);
+}
+
+// What every decision needs, kept small: one row per bot, credential,
+// match or lobby. A match's history (auctions, results, words, bids) grows
+// with every match ever played, so it's subscribed per match, only for the
+// matches this bot sits in.
+const GLOBAL_QUERIES = [
+  tables.bot,
+  tables.botCredential,
+  tables.matchState,
+  tables.openLobbies,
+  tables.openLobbyMembers,
+  tables.myRack,
+  tables.tournament,
+  tables.tournamentEntry,
+  tables.tournamentMatch,
+];
+const subscribedMatches = new Set<bigint>();
+
+function subscribeMatch(conn: DbConnection, matchId: bigint) {
+  if (subscribedMatches.has(matchId)) return;
+  subscribedMatches.add(matchId);
+  conn
+    .subscriptionBuilder()
+    .onError(() => {
+      subscribedMatches.delete(matchId);
+      console.warn(`[${BOT_NAME}] subscription to match ${matchId} failed`);
+    })
+    .subscribe([
+      tables.matchParticipant.where((r) => r.matchId.eq(matchId)),
+      tables.auction.where((r) => r.matchId.eq(matchId)),
+      tables.auctionResult.where((r) => r.matchId.eq(matchId)),
+      tables.wordPlay.where((r) => r.matchId.eq(matchId)),
+      tables.auctionTopBidArchive.where((r) => r.matchId.eq(matchId)),
+    ]);
+}
+
+// Our own seats; each new one brings in its match.
+function subscribeMine(conn: DbConnection, botId: bigint) {
+  conn
+    .subscriptionBuilder()
+    .onApplied(() => {
+      for (const p of conn.db.matchParticipant.iter()) {
+        if (p.botId !== botId) continue;
+        if (index?.match(p.matchId)?.status.tag === "Running") subscribeMatch(conn, p.matchId);
+      }
+      bootstrapActivity(conn);
+    })
+    .subscribe([tables.matchParticipant.where((r) => r.botId.eq(botId))]);
 }
 
 // Everything the brain needs about one match, from the client cache.
@@ -349,7 +401,7 @@ function onConnect(conn: DbConnection, identity: Identity, token: string) {
   const live = new LiveIndex(conn);
   const subscribedAt = performance.now();
   console.log(
-    `[${BOT_NAME}] subscribing; the server's full history can take a minute`,
+    `[${BOT_NAME}] subscribing to bots, matches and lobbies`,
   );
   conn
     .subscriptionBuilder()
@@ -381,8 +433,8 @@ function onConnect(conn: DbConnection, identity: Identity, token: string) {
             console.log(
               `[${BOT_NAME}] claimed credential for bot '${bot?.name ?? "?"}' (id ${myBotId})`,
             );
-            relearn(conn);
-            bootstrapActivity(conn);
+            seedRivals(conn);
+            subscribeMine(conn, myBotId);
           }, 1000);
           return;
         } else {
@@ -397,10 +449,16 @@ function onConnect(conn: DbConnection, identity: Identity, token: string) {
       console.log(
         `[${BOT_NAME}] acting as bot '${bot?.name ?? "?"}' (id ${myBotId})`,
       );
-      relearn(conn);
-      bootstrapActivity(conn);
+      seedRivals(conn);
+      subscribeMine(conn, myBotId);
     })
-    .subscribeToAllTables();
+    .onError(() => console.error(`[${BOT_NAME}] subscription failed`))
+    .subscribe(GLOBAL_QUERIES);
+
+  // A new seat of ours means a new match: bring in its rows.
+  conn.db.matchParticipant.onInsert((_ctx, p) => {
+    if (myBotId !== null && p.botId === myBotId) subscribeMatch(conn, p.matchId);
+  });
 
   // Decisions wait for the end of the current batch of callbacks, so every
   // row from the same transaction (the closed auction's result, our new
@@ -452,12 +510,12 @@ function onConnect(conn: DbConnection, identity: Identity, token: string) {
 function joinLobby(conn: DbConnection) {
   if (myBotId === null) return;
   if (myRunningMatches(conn).length > 0) return;
-  const openLobby = Array.from(conn.db.lobby.iter()).find(
+  const openLobby = Array.from(conn.db.openLobbies.iter()).find(
     (l) => l.status.tag === "Open",
   );
   const alreadyIn =
     openLobby !== undefined &&
-    Array.from(conn.db.lobbyMember.iter()).some(
+    Array.from(conn.db.openLobbyMembers.iter()).some(
       (lm) => lm.lobbyId === openLobby.id && lm.botId === myBotId,
     );
   if (alreadyIn) return;
@@ -488,10 +546,16 @@ function main() {
     .withDatabaseName(DB_NAME)
     .withToken(BOT_TOKEN ?? loadToken())
     .onConnect(onConnect)
-    .onConnectError((_ctx: ErrorContext, err: Error) =>
-      console.error("connect error:", err.message),
-    )
-    .onDisconnect(() => console.log("disconnected"))
+    .onConnectError((_ctx: ErrorContext, err: Error) => {
+      console.error("connect error:", err.message);
+      setTimeout(() => process.exit(2), 500);
+    })
+    // Exit on a lost connection, so a wrapper loop (see STRATEGY.md) starts
+    // a fresh one; reconnecting in-process would need all state reset.
+    .onDisconnect(() => {
+      console.log(`[${BOT_NAME}] disconnected; exiting so the run loop restarts the bot`);
+      setTimeout(() => process.exit(2), 500);
+    })
     .build();
 }
 

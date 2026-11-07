@@ -61,6 +61,15 @@ export function fit(samples: readonly BidSample[]): FittedModel {
 export class OpponentBook {
   private samples = new Map<bigint, BidSample[]>();
   private fitted = new Map<bigint, FittedModel>();
+  // Models fitted offline (npm run observe → rivals.json), used until we
+  // have seen enough of the bot ourselves.
+  private seeds = new Map<bigint, FittedModel>();
+  static readonly OWN_SAMPLES_TO_REPLACE_SEED = 30;
+
+  seed(botId: bigint, model: FittedModel) {
+    this.seeds.set(botId, model);
+    this.fitted.delete(botId);
+  }
 
   // Replace everything we know with a fresh scan of public history.
   rebuild(
@@ -94,7 +103,9 @@ export class OpponentBook {
   model(botId: bigint, balance: number): OpponentModel {
     let f = this.fitted.get(botId);
     if (!f) {
-      f = fit(this.samples.get(botId) ?? []);
+      const own = this.samples.get(botId) ?? [];
+      const seed = this.seeds.get(botId);
+      f = seed && own.length < OpponentBook.OWN_SAMPLES_TO_REPLACE_SEED ? seed : fit(own);
       this.fitted.set(botId, f);
     }
     return {
