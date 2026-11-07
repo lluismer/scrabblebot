@@ -120,6 +120,15 @@ export class LiveIndex {
     return this.open.get(matchId)?.letter ?? null;
   }
 
+  openAuction(matchId: bigint): { id: bigint; letter: string } | undefined {
+    return this.open.get(matchId);
+  }
+
+  // Whether `auctionId` is still the open auction in its match.
+  isOpen(matchId: bigint, auctionId: bigint): boolean {
+    return this.open.get(matchId)?.id === auctionId;
+  }
+
   result(matchId: bigint, auctionId: bigint): AuctionEvent | undefined {
     return this.results.get(matchId)?.get(auctionId);
   }

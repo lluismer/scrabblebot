@@ -13,7 +13,8 @@ import {
 export interface Brain {
   name: string;
   newMatch(): void;
-  bid(view: MatchView, letter: string): number;
+  // `timeMs`: how long it may think, when less than usual.
+  bid(view: MatchView, letter: string, timeMs?: number): number;
   // Words to play right now, in order. Called after every rack change and
   // when each auction opens.
   play(view: MatchView): string[];
@@ -31,8 +32,8 @@ export class StrategyC implements Brain {
   newMatch() {
     this.planner.newMatch();
   }
-  bid(view: MatchView, letter: string): number {
-    const d = this.planner.decideBid(view, letter);
+  bid(view: MatchView, letter: string, timeMs?: number): number {
+    const d = this.planner.decideBid(view, letter, timeMs);
     this.lastNote =
       `ΔV=${d.dv.toFixed(2)} (rival ${d.rivalDv.toFixed(1)}) λ=${d.lambda.toFixed(3)} ` +
       `P(win)=${d.winProb.toFixed(2)} n=${d.samples}`;

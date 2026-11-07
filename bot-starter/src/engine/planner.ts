@@ -114,6 +114,14 @@ export class Planner {
   // Chance of winning each letter at our current prices.
   private winProb = new Float64Array(26);
   lambda = 0.5;
+  // The last auction's picture of the market, to price coins for plays.
+  private market: {
+    dv: Float64Array;
+    tables: (PriceTable | null)[];
+    unseen: Rack;
+    future: number;
+    base: number;
+  } | null = null;
 
   constructor(
     readonly lex: Lexicon,
@@ -126,6 +134,53 @@ export class Planner {
   newMatch() {
     this.winProb.fill(this.params.winPrior);
     this.lambda = 0.5;
+    this.market = null;
+  }
+
+  // Expected value of the tiles we'd buy over the rest of the match with
+  // `coins` to spend: solve the budget for λ with that balance, then add
+  // up ΔV × P(win) over the auctions to come.
+  private tileGains(coins: number): number {
+    const m = this.market;
+    if (!m || m.future === 0 || coins <= 0) return 0;
+    let poolSize = 0;
+    for (let i = 0; i < 26; i++) poolSize += m.unseen[i]!;
+    if (poolSize === 0) return 0;
+    const budget = coins + this.params.earnFactor * m.base;
+    const at = (lambda: number) => {
+      let spend = 0;
+      let gain = 0;
+      for (let i = 0; i < 26; i++) {
+        const t = m.tables[i];
+        if (!t || m.unseen[i]! === 0) continue;
+        const o = t.optimal(m.dv[i]!, lambda, coins);
+        const w = m.unseen[i]! / poolSize;
+        spend += w * o.expectedPay;
+        gain += w * m.dv[i]! * o.winProb;
+      }
+      return { spend: m.future * spend, gain: m.future * gain };
+    };
+    let lambda = 0;
+    if (at(0).spend > budget) {
+      let lo = 0;
+      let hi = 1;
+      while (at(hi).spend > budget && hi < 1e4) hi *= 2;
+      for (let it = 0; it < 30; it++) {
+        const mid = (lo + hi) / 2;
+        if (at(mid).spend > budget) lo = mid;
+        else hi = mid;
+      }
+      lambda = hi;
+    }
+    return at(lambda).gain;
+  }
+
+  // What `reward` more coins are worth in score: the extra tiles they buy.
+  // Unlike λ this stays high when we're broke, which is exactly when a
+  // word should be cashed in to get back into the auctions.
+  moneyValue(balance: number, reward: number): number {
+    if (!this.market) return this.lambda * reward;
+    return Math.max(0, this.tileGains(balance + reward) - this.tileGains(balance));
   }
 
   private denialWeight(view: MatchView): number {
@@ -296,15 +351,23 @@ export class Planner {
     return tables;
   }
 
-  decideBid(view: MatchView, letter: string): BidDecision {
+  // `timeMs` overrides the rollout budget, for an auction that arrived late.
+  decideBid(view: MatchView, letter: string, timeMs?: number): BidDecision {
     const x = letterIndex(letter);
     // The last tile arrives after the match ends: worthless.
     if (view.bagTotal === 0 || view.balance <= 0) {
       return { bid: 0, dv: 0, rivalDv: 0, lambda: 0, winProb: 0, samples: 0 };
     }
-    const { dv, rivalDv, base, n } = this.valuate(view, this.params.bidTimeMs, x);
+    const { dv, rivalDv, base, n } = this.valuate(view, timeMs ?? this.params.bidTimeMs, x);
     const tables = this.priceTables(view);
     this.lambda = this.solveLambda(view, dv, base, tables, x);
+    this.market = {
+      dv,
+      tables,
+      unseen: view.unseen,
+      future: Math.max(0, view.bagTotal - 1),
+      base,
+    };
     const o = tables[x]!.optimal(dv[x]!, this.lambda, view.balance);
     return {
       bid: o.bid,
@@ -323,7 +386,9 @@ export class Planner {
       const p = bestPartition(this.lex, view.rack, EXACT_BEAM, new Map());
       return { words: p.words, why: `final dump for ${p.value}` };
     }
-    if (this.lambda <= 0) return { words: [], why: "coins are worthless now" };
+    // Coins are only worth something while there are auctions left to
+    // spend them in (the last one's tile is useless).
+    if (view.bagTotal <= 1) return { words: [], why: "no auctions left to spend in" };
     const candidates = this.lex.topWords(view.rack, 6);
     if (candidates.length === 0) return { words: [], why: "no words" };
 
@@ -352,12 +417,12 @@ export class Planner {
     let best: { word: string; gain: number } | null = null;
     candidates.forEach((c, k) => {
       const loss = hold - c.reward - afterSum[k]! / n;
-      const gain = this.lambda * c.reward - loss;
+      const gain = this.moneyValue(view.balance, c.reward) - loss;
       if (!best || gain > best.gain) best = { word: c.word, gain };
     });
     const b = best as { word: string; gain: number } | null;
     if (b && b.gain > this.params.playMargin) {
-      return { words: [b.word], why: `liquidity gain ${b.gain.toFixed(1)}` };
+      return { words: [b.word], why: `coins worth more than holding by ${b.gain.toFixed(1)}` };
     }
     return { words: [], why: "holding" };
   }

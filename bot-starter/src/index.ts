@@ -239,15 +239,24 @@ function ensureBrainMatch(matchId: bigint) {
   brain.newMatch();
 }
 
+// Auctions last 1 s. A bid has to be decided and on the wire well inside
+// that, counting from when the auction reached us.
+const AUCTION_WINDOW_MS = 1000;
+const SEND_MARGIN_MS = 300; // network + server time we leave for the bid
+const MIN_THINK_MS = 30;
+
 function tryBid(
   conn: DbConnection,
   auctionId: bigint,
   matchId: bigint,
   letter: string,
+  seenAt = performance.now(),
 ) {
-  if (myBotId === null) return;
+  if (myBotId === null || !index) return;
   const key = `${matchId}:${auctionId}`;
   if (bidsByAuction.has(key)) return;
+  // A backlog of callbacks can hand us an auction that has already closed.
+  if (!index.isOpen(matchId, auctionId)) return;
   const view = viewFor(conn, matchId);
   if (!view) return;
   ensureBrainMatch(matchId);
@@ -258,10 +267,20 @@ function tryBid(
     tryPlayWord(conn, matchId);
     return;
   }
+  const late = performance.now() - seenAt;
+  const thinkMs = Math.min(
+    Number(process.env.BID_TIME_MS ?? 300),
+    AUCTION_WINDOW_MS - SEND_MARGIN_MS - late,
+  );
+  if (thinkMs < MIN_THINK_MS) {
+    console.log(`[${BOT_NAME}] #${auctionId} '${letter}' skipped: reached us ${late.toFixed(0)}ms late`);
+    tryPlayWord(conn, matchId);
+    return;
+  }
   const t0 = performance.now();
   const amount = Math.min(
     view.balance,
-    Math.max(0, Math.floor(brain.bid(view, letter))),
+    Math.max(0, Math.floor(brain.bid(view, letter, thinkMs))),
   );
   const ms = performance.now() - t0;
   if (amount > 0) {
@@ -303,9 +322,23 @@ function tryPlayWord(conn: DbConnection, onlyMatch?: bigint) {
   }
 }
 
-// The rack changed: a win landed, or the server applied our words.
+// The rack changed: a win landed, or the server applied our words. One
+// change can arrive as several rows (5 at the deal), so run one decision
+// per batch, and leave it to the bid when an auction is waiting for one:
+// tryBid plays words right after bidding.
+let playScheduled = false;
 function onRackChanged(conn: DbConnection) {
-  tryPlayWord(conn);
+  if (playScheduled) return;
+  playScheduled = true;
+  setImmediate(() => {
+    playScheduled = false;
+    if (!index) return;
+    const waiting = myRunningMatches(conn).some((id) => {
+      const a = index!.openAuction(id);
+      return a !== undefined && !bidsByAuction.has(`${id}:${a.id}`);
+    });
+    if (!waiting) tryPlayWord(conn);
+  });
 }
 
 function onConnect(conn: DbConnection, identity: Identity, token: string) {
@@ -374,11 +407,12 @@ function onConnect(conn: DbConnection, identity: Identity, token: string) {
   // tile) is in the indexes first.
   conn.db.auction.onInsert((_ctx: EventContext, a) => {
     if (!index || a.status.tag !== "Open") return;
-    setImmediate(() => tryBid(conn, a.id, a.matchId, a.letter));
+    const seenAt = performance.now();
+    setImmediate(() => tryBid(conn, a.id, a.matchId, a.letter, seenAt));
   });
-  conn.db.myRack.onInsert(() => index && setImmediate(() => onRackChanged(conn)));
-  conn.db.myRack.onUpdate(() => index && setImmediate(() => onRackChanged(conn)));
-  conn.db.myRack.onDelete(() => index && setImmediate(() => onRackChanged(conn)));
+  conn.db.myRack.onInsert(() => index && onRackChanged(conn));
+  conn.db.myRack.onUpdate(() => index && onRackChanged(conn));
+  conn.db.myRack.onDelete(() => index && onRackChanged(conn));
   conn.db.auctionTopBidArchive.onInsert((_ctx, a) => {
     if (!index) return;
     const r = index.result(a.matchId, a.auctionId);
