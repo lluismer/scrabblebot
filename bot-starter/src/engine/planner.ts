@@ -26,6 +26,7 @@
 import { bestPartition, EXACT_BEAM, FAST_BEAM } from "./evaluator.js";
 import type { Lexicon } from "./lexicon.js";
 import { emptyRack, letterIndex, rackSize, type Rack } from "./letters.js";
+import { LETTER_VALUE } from "./values.js";
 import {
   maxBidPmf,
   PriceTable,
@@ -72,6 +73,17 @@ export interface Params {
   // left at the end is worth nothing, so the cap on bids must not outlast
   // the auctions it could still be spent in.
   floorTaper: number;
+  // Tile-count floor: finishing place tracks tiles won (real data: 9-11
+  // tiles -> place 4.0, 15-17 -> 2.0), so while we're behind a pace to
+  // reach tileTarget, bid at least floorBid on 1-2 point letters. 0 = off.
+  tileTarget: number;
+  floorBid: number;
+  // Value tilt: rivals price by point value with a big intercept, so
+  // 1-point letters return ~0.22 points per coin and 4+ point letters
+  // 0.5-0.8. Cap 1-point bids at cheapCap (0 = off) unless the floor
+  // needs them, and scale the value of 4+ point letters by heavyBoost.
+  cheapCap: number;
+  heavyBoost: number;
 }
 
 export const DEFAULT_PARAMS: Params = {
@@ -90,6 +102,10 @@ export const DEFAULT_PARAMS: Params = {
   minPlayLen: 2,
   recycle: 0,
   floorTaper: 20,
+  tileTarget: 0,
+  floorBid: 12,
+  cheapCap: 0,
+  heavyBoost: 1,
 };
 
 export interface MatchView {
@@ -103,6 +119,8 @@ export interface MatchView {
   // The leading rival's rack as far as public events show it: tiles won
   // minus tiles played, plus how many starting tiles are still hidden.
   rival?: { rack: Rack; hidden: number };
+  // Tiles we've won at auction this match (not counting the starting rack).
+  tilesWon?: number;
 }
 
 export interface BidDecision {
@@ -395,9 +413,23 @@ export class Planner {
       future: Math.max(0, view.bagTotal - 1),
       base,
     };
+    const value = LETTER_VALUE[letter] ?? 0;
+    if (value >= 4) dv[x] = dv[x]! * this.params.heavyBoost;
     const o = tables[x]!.optimal(dv[x]!, this.lambda, view.balance);
+    let bid = o.bid;
+    const p = this.params;
+    const usable = Math.max(1, view.bagTotal - 2);
+    const behind =
+      p.tileTarget > 0 &&
+      view.bagTotal >= 2 &&
+      (p.tileTarget - (view.tilesWon ?? 0)) / usable > 0.2;
+    if (behind && value <= 2) {
+      bid = Math.max(bid, Math.min(p.floorBid, view.balance));
+    } else if (p.cheapCap > 0 && value === 1) {
+      bid = Math.min(bid, p.cheapCap);
+    }
     return {
-      bid: o.bid,
+      bid,
       dv: dv[x]!,
       rivalDv: rivalDv[x]!,
       lambda: this.lambda,

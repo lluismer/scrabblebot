@@ -155,7 +155,10 @@ function isRealBot(conn: DbConnection, botId: bigint): boolean {
 // match it plays then adds what it sees.
 function seedRivals(conn: DbConnection) {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const files = [path.join(here, "..", "data", "rivals.json"), path.join(here, "..", "hpc", "rivals.json")];
+  // Only the censored refit (npx tsx src/tools/refit-rivals.ts). rivals.json
+  // holds winners-only fits that overstate every bot's bid by ~8.5 coins;
+  // without the refit, every rival gets the (unbiased) prior.
+  const files = [path.join(here, "..", "data", "rivals-refit.json"), path.join(here, "..", "hpc", "rivals-refit.json")];
   const file = files.find((f) => fs.existsSync(f));
   if (!file) {
     console.log(`[${BOT_NAME}] no rivals.json; real rivals start from the default model`);
@@ -278,6 +281,7 @@ function viewFor(conn: DbConnection, matchId: bigint): MatchView | null {
       : undefined,
     kind: m.auctionType.tag === "FirstPrice" ? "FirstPrice" : "Vickrey",
     bagTotal: m.bagTotal,
+    tilesWon: results.filter((r) => r.winnerBotId === myBotId).length,
     balance: me.balance,
     rack,
     unseen: unseenPool({ myBotId, myRack: rack, results, words, openLetter }),

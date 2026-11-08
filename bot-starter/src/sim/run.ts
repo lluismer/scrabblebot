@@ -34,7 +34,7 @@ import { playMatch, SIM_POOL, SimWords, type RivalModel, type Seat } from "./eng
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WORDLIST = path.join(here, "..", "..", "..", "spacetimedb", "wordlist.txt");
-const RIVALS = path.join(here, "..", "..", "hpc", "rivals.json");
+const RIVALS = path.resolve(arg("rivals-file", path.join(here, "..", "..", "hpc", "rivals.json")));
 
 // Calibrated with `--lineup rivals`: with this shift, stand-ins at a table
 // of six win and pay about what the real bots do (about 12–13 tiles a
@@ -98,6 +98,10 @@ interface RivalEntry {
   name: string;
   bid: { slope: number; intercept: number; sd: number };
   avgWordLength: number;
+  coef?: number[];
+  minLen?: number;
+  cashBal?: number;
+  shift?: number;
 }
 
 function loadRivals(): Seat[] {
@@ -107,8 +111,10 @@ function loadRivals(): Seat[] {
       slope: r.bid.slope,
       intercept: r.bid.intercept,
       sd: r.bid.sd,
-      minLen: rivalMinLen || Math.max(2, Math.round(r.avgWordLength)),
-      shift,
+      minLen: r.minLen ?? (rivalMinLen || Math.max(2, Math.round(r.avgWordLength))),
+      shift: r.shift ?? shift,
+      coef: r.coef,
+      cashBal: r.cashBal,
     };
     return { kind: "rival", name: `rival:${r.name}`, ...model };
   });
@@ -175,7 +181,7 @@ function seatsFor(lex: Lexicon, rng: () => number, rivals: Seat[]): Seat[] {
 // Tally key: sims and rivals are pooled; brains keep their own names.
 function keyOf(name: string): string {
   if (name.endsWith("-sim")) return "sims (avg)";
-  if (name.startsWith("rival:")) return "rivals (avg)";
+  if (name.startsWith("rival:")) return process.argv.includes("--per-rival") ? name : "rivals (avg)";
   return name;
 }
 

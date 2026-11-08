@@ -24,9 +24,11 @@ export interface FittedModel {
   n: number;
 }
 
-// The median real bot on the live server (134 bots with 200+ winning bids,
-// 2026-11-07): bid ≈ 2.9·value + 11.5, sd 6.3.
-export const PRIOR: FittedModel = { slope: 2.9, intercept: 11.5, sd: 6.3, n: 0 };
+// A typical real bot in real-only matches, from the censored fit that uses
+// the top bid AND the price paid (src/tools/refit-rivals.ts, 2026-11-07):
+// bid ≈ 3.5·value + 0, sd 7. The old prior, 2.9·value + 11.5, came from
+// winners' bids alone and sat ~8.5 coins too high.
+export const PRIOR: FittedModel = { slope: 3.5, intercept: 0, sd: 7, n: 0 };
 const PRIOR_WEIGHT = 8;
 
 export function fit(samples: readonly BidSample[]): FittedModel {
@@ -103,9 +105,10 @@ export class OpponentBook {
   model(botId: bigint, balance: number): OpponentModel {
     let f = this.fitted.get(botId);
     if (!f) {
-      const own = this.samples.get(botId) ?? [];
-      const seed = this.seeds.get(botId);
-      f = seed && own.length < OpponentBook.OWN_SAMPLES_TO_REPLACE_SEED ? seed : fit(own);
+      // What we see live is winners' bids only, which overstate a bot's
+      // bid; never let it replace the censored offline fit. A bot with no
+      // history gets the prior.
+      f = this.seeds.get(botId) ?? PRIOR;
       this.fitted.set(botId, f);
     }
     return {

@@ -47,6 +47,37 @@ export interface RivalModel {
   // The fit comes from winning bids, which overstate a typical bid;
   // shift is calibrated so the stand-ins win and pay what the real bots do.
   shift: number;
+  // Imitation stand-in (analysis/report.py): a censored-regression bid on
+  // [1, value, vowel, min(have,2), rackSize, matchFrac, balance/10, tilesWon,
+  //  lenGain, makes6, makes7+], and words: play the best word once it has
+  // minLen letters, or any word of 3+ when the balance is under cashBal.
+  coef?: number[];
+  cashBal?: number;
+}
+
+function bestLen(lex: Lexicon, rack: Rack): number {
+  const top = lex.topWords(rack, 1, 3)[0];
+  return top ? top.word.length : 0;
+}
+
+export function imitationBid(
+  lex: Lexicon, m: RivalModel, rack: Rack, letter: number, balance: number,
+  tilesWon: number, frac: number, rng: () => number,
+): number {
+  const c = m.coef!;
+  let size = 0;
+  for (let i = 0; i < 26; i++) size += rack[i]!;
+  const b0 = bestLen(lex, rack);
+  rack[letter]!++;
+  const b1 = bestLen(lex, rack);
+  rack[letter]!--;
+  const gain = Math.max(b1 - b0, 0);
+  const x = [1, VALUES[letter]!, [0, 4, 8, 14, 20].includes(letter) ? 1 : 0,
+    Math.min(rack[letter]!, 2), size, frac, balance / 10, tilesWon, gain,
+    b1 === 6 && gain > 0 ? 1 : 0, b1 >= 7 && gain > 0 ? 1 : 0];
+  let mean = -m.shift;
+  for (let i = 0; i < c.length; i++) mean += c[i]! * x[i]!;
+  return Math.max(0, Math.min(balance, Math.round(mean + m.sd * gaussian(rng))));
 }
 
 function gaussian(rng: () => number): number {
@@ -224,6 +255,7 @@ export function playMatch(
     rival: knownHoldings(leaderOf(p).id, results, words, rackSize),
     kind,
     bagTotal,
+    tilesWon: won[players.indexOf(p)] ?? 0,
     balance: p.balance,
     rack: p.rack.slice() as Rack,
     unseen: unseenPool({
@@ -269,16 +301,21 @@ export function playMatch(
     for (const p of players) {
       const s = p.seat;
       if (s.kind !== "rival") continue;
-      const mean = s.slope * VALUES[letter]! + s.intercept - s.shift;
-      const a = Math.max(0, Math.min(p.balance, Math.round(mean + s.sd * gaussian(rng))));
+      const pi = players.indexOf(p);
+      const frac = results.length / (results.length + bagTotal + 1);
+      const a = s.coef
+        ? imitationBid(lex, s, p.rack, letter, p.balance, won[pi]!, frac, rng)
+        : Math.max(0, Math.min(p.balance, Math.round(
+            s.slope * VALUES[letter]! + s.intercept - s.shift + s.sd * gaussian(rng))));
       if (a > 0) bids.push({ p, amount: a });
       if (bagTotal === 0) {
         const part = bestPartition(lex, p.rack, EXACT_BEAM, new Map());
         for (const w of part.words) playWord(p, w);
       } else {
         for (let k = 0; k < 4; k++) {
-          const top = lex.topWords(p.rack, 1)[0];
-          if (!top || top.word.length < s.minLen || !playWord(p, top.word)) break;
+          const top = lex.topWords(p.rack, 1, 3)[0];
+          const cash = s.cashBal !== undefined && p.balance < s.cashBal;
+          if (!top || (top.word.length < s.minLen && !cash) || !playWord(p, top.word)) break;
         }
       }
     }

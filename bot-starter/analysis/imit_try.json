@@ -1,0 +1,185 @@
+{
+ "source": "Tobit imitation fits on all-real 6-seat tables since 2026-11-07 19:30 (analysis/fit.py, report.py), plus a rack-fit bonus (+3 lenGain, +6 makes6, +9 makes7, -4 const) calibrated in the sim",
+ "rivals": [
+  {
+   "name": "GodOfThudner",
+   "matches": 150,
+   "avgPlace": 1.82,
+   "avgScore": 103.37333333333333,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 9.76
+   },
+   "avgWordLength": 5.440520446096654,
+   "lettersWonPerMatch": 15.0,
+   "avgPaid": 12.991111111111111,
+   "coef": [
+    -29.15,
+    2.41,
+    0.35,
+    -4.03,
+    0.68,
+    16.77,
+    2.23,
+    0.2,
+    3.73,
+    7.58,
+    10.78
+   ],
+   "minLen": 7,
+   "cashBal": 20,
+   "shift": -4.0
+  },
+  {
+   "name": "LexForge-1107",
+   "matches": 89,
+   "avgPlace": 1.8764044943820224,
+   "avgScore": 98.75280898876404,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 10.34
+   },
+   "avgWordLength": 5.498269896193771,
+   "lettersWonPerMatch": 13.359550561797754,
+   "avgPaid": 13.83851976450799,
+   "coef": [
+    -26.37,
+    2.92,
+    1.49,
+    -6.24,
+    0.44,
+    15.06,
+    1.76,
+    0.04,
+    4.31,
+    6.12,
+    9.62
+   ],
+   "minLen": 7,
+   "cashBal": 20,
+   "shift": -4.0
+  },
+  {
+   "name": "RackMaw",
+   "matches": 114,
+   "avgPlace": 1.9385964912280702,
+   "avgScore": 96.87719298245614,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 10.26
+   },
+   "avgWordLength": 5.581920903954802,
+   "lettersWonPerMatch": 13.052631578947368,
+   "avgPaid": 13.856854838709678,
+   "coef": [
+    -32.15,
+    3.19,
+    1.76,
+    -6.46,
+    0.63,
+    17.28,
+    2.13,
+    0.16,
+    4.23,
+    5.89,
+    10.09
+   ],
+   "minLen": 7,
+   "cashBal": 20,
+   "shift": -4.0
+  },
+  {
+   "name": "LUCENT",
+   "matches": 150,
+   "avgPlace": 2.4133333333333336,
+   "avgScore": 90.68666666666667,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 11.23
+   },
+   "avgWordLength": 5.73175965665236,
+   "lettersWonPerMatch": 13.533333333333333,
+   "avgPaid": 12.59064039408867,
+   "coef": [
+    -30.88,
+    1.98,
+    0.08,
+    -3.16,
+    0.5,
+    11.08,
+    2.4,
+    0.48,
+    3.86,
+    9.2,
+    11.32
+   ],
+   "minLen": 7,
+   "cashBal": 20,
+   "shift": -4.0
+  },
+  {
+   "name": "Bron",
+   "matches": 150,
+   "avgPlace": 2.7266666666666666,
+   "avgScore": 89.20666666666666,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 7.6
+   },
+   "avgWordLength": 5.759911894273127,
+   "lettersWonPerMatch": 13.106666666666667,
+   "avgPaid": 12.367243133265514,
+   "coef": [
+    -25.16,
+    2.12,
+    0.45,
+    -3.25,
+    0.23,
+    24.18,
+    1.93,
+    -0.49,
+    3.98,
+    6.8,
+    9.45
+   ],
+   "minLen": 7,
+   "cashBal": 15,
+   "shift": -4.0
+  },
+  {
+   "name": "Odysseus's Voyage",
+   "matches": 150,
+   "avgPlace": 3.2666666666666666,
+   "avgScore": 78.25333333333333,
+   "bid": {
+    "slope": 2.5,
+    "intercept": 0,
+    "sd": 11.6
+   },
+   "avgWordLength": 5.687960687960688,
+   "lettersWonPerMatch": 11.173333333333334,
+   "avgPaid": 13.199880668257757,
+   "coef": [
+    -19.37,
+    2.12,
+    0.11,
+    -5.43,
+    0.12,
+    -1.39,
+    1.31,
+    0.71,
+    5.17,
+    3.11,
+    7.69
+   ],
+   "minLen": 7,
+   "cashBal": 15,
+   "shift": -4.0
+  }
+ ]
+}
