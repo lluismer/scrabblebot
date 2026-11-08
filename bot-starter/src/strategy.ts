@@ -5,6 +5,10 @@ import { StrategyC, type Brain } from "./engine/brains.js";
 import type { Lexicon } from "./engine/lexicon.js";
 import { DEFAULT_PARAMS, type Params } from "./engine/planner.js";
 import { RushBrain, rushParamsFromEnv } from "./rush/rush.js";
+// Rethink candidates load only when BRAIN names one, so the usual brains
+// never depend on src/rethink.
+const RETHINK =
+  process.env.BRAIN && process.env.BRAIN !== "rush" ? await import("./rethink/registry.js") : undefined;
 
 export { LETTER_VALUE } from "./engine/values.js";
 
@@ -46,6 +50,14 @@ export const LIVE_PARAMS: Params = {
 };
 
 export function createBrain(lex: Lexicon): Brain {
+  // BRAIN=<candidate> (or "<candidate>:key=value,...") runs one of the
+  // rethink candidates (src/rethink/registry.ts), wrapped so it can't crash.
+  const spec = process.env.BRAIN ?? "";
+  if (RETHINK) {
+    if (!RETHINK.CANDIDATES[spec.split(":")[0]!]) throw new Error(`BRAIN=${spec}: no such brain`);
+    console.log(`rethink candidate: ${spec}`);
+    return RETHINK.createCandidate(spec, lex);
+  }
   // BRAIN=rush runs the 7-letter rush experiment (src/rush/rush.ts) instead.
   if (process.env.BRAIN === "rush") {
     const p = rushParamsFromEnv();
