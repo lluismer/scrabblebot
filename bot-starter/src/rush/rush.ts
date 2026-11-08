@@ -7,13 +7,19 @@
 // and the field prices tiles by point value, so those are where we should
 // win auctions.
 //
-// Rack value: V(R) = best + 0.15·(sum of the next 20) over all 7–8 letter
+// Rack value: V(R) = best + 0.15·(sum of the next 20) over all 7-letter
 // words w still possible from the unseen pool, scoring each word as
 //   reward(w) · q^need(w, R)
 // where need is how many tiles we still lack and q the chance of getting
 // each one in time. A letter is worth V(R + letter) − V(R): letters that
 // bring a big word one step closer are worth a lot, letters that fit no
 // reachable word are worth nothing.
+//
+// Only 7-letter words are targets: the length bonus stops at 7 (3×), so
+// an 8th letter adds just its own 3× value for one more tile to win. Live
+// (real-bot matches, 2026-11-07): 5.65 points per tile at 7 letters, 5.53
+// at 8, 5.43 at 9. An 8+ letter word the rack already spells still gets
+// played.
 //
 // Bid (Vickrey: pay the second price):
 //  • A tile that completes a 7+ letter word pays for itself at once (we
@@ -31,7 +37,12 @@
 // a shorter word only if it lifts us back to the reserve; in the last
 // auction, the best split of everything.
 //
-// Tuning: RUSH_PARAMS="q=0.6,k=2,cap=0.35,broke=25,minBid=16,reserve=14"
+// Picky: a letter no lead target lacks gets at most `picky` coins (coins,
+// not tiles, cap us at ~3 words a match). Late (bag ≤ lateBag) we cash a
+// 6 unless one tile would finish a 7.
+//
+// Tuning: RUSH_PARAMS="q=0.6,k=2,cap=0.35,broke=25,minBid=16,reserve=14,picky=8,lateBag=20"
+// The old behaviour: RUSH_PARAMS="picky=999,lateBag=0"
 
 import type { Brain } from "../engine/brains.js";
 import { bestPartition, EXACT_BEAM } from "../engine/evaluator.js";
@@ -45,6 +56,7 @@ export interface RushParams {
   cap: number; // max share of the balance on one tile
   broke: number; // below this balance, cash a 5–6 letter word
   minLen: number; // shortest word the rush aims for
+  maxLen: number; // longest word the rush aims for
   minBid: number; // the cap never goes below this (about the clearing price)
   cheapBid: number; // floor bid on 1–2 point letters a lead target needs, while the rack is short
   shortRack: number; // "short" = fewer tiles than this
@@ -52,6 +64,8 @@ export interface RushParams {
   reserve: number; // coins kept back from ordinary bids (not from completing ones)
   payback: number; // share of a completed word's reward we'll bid for the tile that completes it
   endgame: number; // with this many tiles or fewer left in the bag, bid the whole balance
+  picky: number; // most we bid on a letter no lead target lacks (and that completes nothing)
+  lateBag: number; // with this many tiles or fewer left, cash a 6 when no 7 is one tile away (0 = off)
 }
 
 export const RUSH_DEFAULTS: RushParams = {
@@ -60,6 +74,7 @@ export const RUSH_DEFAULTS: RushParams = {
   cap: 0.35,
   broke: 25,
   minLen: 7,
+  maxLen: 7,
   minBid: 16,
   cheapBid: 13,
   shortRack: 5,
@@ -67,6 +82,8 @@ export const RUSH_DEFAULTS: RushParams = {
   reserve: 14,
   payback: 0.8,
   endgame: 4,
+  picky: 8,
+  lateBag: 20,
 };
 
 export function rushParamsFromEnv(): RushParams {
@@ -101,7 +118,7 @@ export class RushBrain implements Brain {
     readonly params: RushParams = RUSH_DEFAULTS,
   ) {
     for (const w of lex.allWords()) {
-      if (w.length < params.minLen || w.length > 8) continue;
+      if (w.length < params.minLen || w.length > params.maxLen) continue;
       const counts = new Uint8Array(26);
       let base = 0;
       for (const ch of w) {
@@ -175,6 +192,19 @@ export class RushBrain implements Brain {
     return this.lex.topWords(rack, 1, this.params.minLen)[0]?.reward ?? 0;
   }
 
+  // Would one more tile still in the unseen pool let us spell a 7+?
+  private oneAway(view: MatchView): boolean {
+    const r = view.rack.slice() as Rack;
+    for (let i = 0; i < 26; i++) {
+      if (!view.unseen[i]) continue;
+      r[i]!++;
+      const hit = this.longNow(r) > 0;
+      r[i]!--;
+      if (hit) return true;
+    }
+    return false;
+  }
+
   bid(view: MatchView, letter: string): number {
     if (view.bagTotal === 0 || view.balance <= 0) return 0;
     const x = letterIndex(letter);
@@ -202,6 +232,9 @@ export class RushBrain implements Brain {
     // letter one of the lead targets still lacks.
     const needed = lead.some((t) => t.counts[x]! > view.rack[x]!);
     if (needed && VALUES[x]! <= 2 && rackSize(view.rack) < p.shortRack) want = Math.max(want, p.cheapBid);
+    // Picky: coins are what limit us to ~3 words a match, so don't pay the
+    // market for a letter none of the lead targets is missing.
+    if (!needed && completes === 0) want = Math.min(want, p.picky);
 
     let cap: number;
     let why: string;
@@ -245,6 +278,15 @@ export class RushBrain implements Brain {
     if (long) {
       this.lastNote = `rush word for ${long.reward}`;
       return [long.word];
+    }
+    // Late in the match, a 7 that's two or more tiles away may never come:
+    // cash a 6 unless a single tile would finish a 7.
+    if (view.bagTotal <= this.params.lateBag && !this.oneAway(view)) {
+      const six = this.lex.topWords(view.rack, 1, 6)[0];
+      if (six) {
+        this.lastNote = `late: cashing ${six.word.length}-letter word for ${six.reward}`;
+        return [six.word];
+      }
     }
     if (view.balance < this.params.broke && view.bagTotal > 3) {
       const mid = this.lex.topWords(view.rack, 1, 5)[0];

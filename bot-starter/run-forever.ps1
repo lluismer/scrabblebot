@@ -5,14 +5,22 @@
 #   powershell -ExecutionPolicy Bypass -File run-forever.ps1 -Name sepcis
 #   # entering a tournament:
 #   powershell -ExecutionPolicy Bypass -File run-forever.ps1 -Name sepcis -Tournament 2
+#   # the 7-letter rush brain (src/rush/rush.ts) instead of strategy C,
+#   # optionally with overrides:
+#   powershell -ExecutionPolicy Bypass -File run-forever.ps1 -Name sepcis -Brain rush
+#   powershell -ExecutionPolicy Bypass -File run-forever.ps1 -Name sepcis -Brain rush -RushParams "picky=8,lateBag=20"
 
 param(
   [string]$Name = "sepcis",
-  [string]$Tournament = ""
+  [string]$Tournament = "",
+  [string]$Brain = "",
+  [string]$RushParams = ""
 )
 
 $env:BOT_NAME = $Name
 if ($Tournament -ne "") { $env:TOURNAMENT_ID = $Tournament }
+$env:BRAIN = $Brain
+$env:RUSH_PARAMS = $RushParams
 Set-Location $PSScriptRoot
 
 while ($true) {

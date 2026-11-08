@@ -15,6 +15,7 @@
 // Against the real field (stand-ins fitted from hpc/rivals.json):
 //   field        strategy C and 5 rivals drawn at random each match
 //   field-final  strategy C against one rival (--rival NAME, default Bron)
+//   rush-field   the rush brain (RUSH_PARAMS) and 5 rivals drawn at random
 //   rivals       6 rivals and no strategy C, to calibrate the stand-ins
 //
 // Options: --samples N (rollouts per decision), --seed S, --first-price,
@@ -30,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { Baseline, StrategyC, type Brain } from "../engine/brains.js";
 import { Lexicon } from "../engine/lexicon.js";
 import { makeRng, DEFAULT_PARAMS, type Params } from "../engine/planner.js";
+import { RushBrain, rushParamsFromEnv } from "../rush/rush.js";
 import { playMatch, SIM_POOL, SimWords, type RivalModel, type Seat } from "./engine.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -166,6 +168,9 @@ function seatsFor(lex: Lexicon, rng: () => number, rivals: Seat[]): Seat[] {
     }
     case "field":
       return [brainSeat(c()), ...shuffled(rivals, rng).slice(0, 5)];
+    // The rush brain (src/rush/rush.ts, tuned by RUSH_PARAMS) and 5 rivals.
+    case "rush-field":
+      return [brainSeat(new RushBrain(lex, rushParamsFromEnv())), ...shuffled(rivals, rng).slice(0, 5)];
     case "field-final": {
       const r = rivals.find((s) => s.name === `rival:${rivalName}`);
       if (!r) throw new Error(`no rival named ${rivalName} in ${RIVALS}`);
