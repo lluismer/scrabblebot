@@ -95,6 +95,14 @@ export const CANDIDATES: Record<string, Factory> = {
   // every phase. Sim (1000 matches, 5 imitation rivals): place 1.67–1.69.
   tourney: (lex, rng, o) =>
     createClone(lex, rng, "GodOfThudner", { target: 20, pace: 2, cashBal: 10, boostSmall: 4, ...o }),
+  // tourney + fixes from its first live matches (it underbid the live
+  // market, overpaid for Q/J that fit nothing, and finished with unspent
+  // coins): +2 coins a bid, at least 10 + 2/point on useful letters worth
+  // up to 4, at most 14 on 5+ point letters that add no length, and from
+  // 20 tiles left, the balance spread over the auctions left. Replay
+  // against 916 real matches: place 2.49-2.72 (tourney 2.76-2.91).
+  tourney2: (lex, rng, o) =>
+    createClone(lex, rng, "GodOfThudner", { target: 20, pace: 2, cashBal: 10, boostSmall: 4, boost: 2, floor: 10, heavyCap: 14, lateBag: 20, ...o }),
   cloneLF: (lex, rng, o) => createClone(lex, rng, "LexForge-1107", { ...o }),
   cloneRaw: (lex, rng, o) => createClone(lex, rng, "GodOfThudner", { raw: 1, ...o }),
   ...optional,

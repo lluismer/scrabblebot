@@ -39,14 +39,24 @@ export interface CloneParams {
   heavy: number; // extra coins per point of letter value above 1
   target: number; // tiles we aim to win (0 = no pacing)
   pace: number; // coins added per tile behind the target pace (and taken off when ahead)
-  spendK: number; // late spend-down: add spendK � balance / auctions left ...
+  spendK: number; // late spend-down: add spendK * balance / auctions left ...
   spendN: number; // ... in the last spendN auctions
   boostSmall: number; // added to every bid at tables smaller than paceSeats (the 1v1 final)
   paceSeats: number; // pacing only at tables of at least this many bots (the 1v1 final does better without)
+  floor: number; // bid at least floor + floorSlope·(value−1) on a useful letter of value ≤ floorMaxVal (0 = off)
+  floorSlope: number;
+  floorMaxVal: number;
+  floorRack: number; // "useful": adds length, or the rack has fewer tiles than this
+  heavyCap: number; // most we bid on a 5+ point letter that adds no length (0 = off)
+  lateBag: number; // with this many tiles left or fewer: short words (0 = off) ...
+  lateMin: number; // ... cash any word this long, and spend the balance over the auctions left
+  lateEvery: number; // ... planning to win one tile in this many
+  lateCash: number; // 1 = late, cash any word of lateMin+ letters at once
   fitOnly: number; // 1 = bid 0 on letters that add no length (gain 0) once the rack has 6+
 }
 
-const DEFAULTS: CloneParams = { raw: 0, endAll: 4, minLen: 7, cashBal: 20, boost: 0, heavy: 0, target: 0, pace: 2, spendK: 0, spendN: 12, fitOnly: 0, paceSeats: 4, boostSmall: 0 };
+const DEFAULTS: CloneParams = { raw: 0, endAll: 4, minLen: 7, cashBal: 20, boost: 0, heavy: 0, target: 0, pace: 2, spendK: 0, spendN: 12, fitOnly: 0, paceSeats: 4, boostSmall: 0,
+  floor: 0, floorSlope: 2, floorMaxVal: 4, floorRack: 7, heavyCap: 0, lateBag: 0, lateMin: 3, lateEvery: 4, lateCash: 0 };
 
 function gaussian(rng: () => number): number {
   const u = Math.max(rng(), 1e-12);
@@ -88,7 +98,10 @@ export function createClone(lex: Lexicon, rng: () => number, model: string, over
       const gain = Math.max(b1 - b0, 0);
       const x = [1, VALUES[L]!, [0, 4, 8, 14, 20].includes(L) ? 1 : 0, Math.min(rack[L]!, 2), size, frac,
         view.balance / 10, view.tilesWon ?? 0, gain, b1 === 6 && gain > 0 ? 1 : 0, b1 >= 7 && gain > 0 ? 1 : 0];
-      let mean = -m.shift + p.boost + p.heavy * (VALUES[L]! - 1);
+      // Big table (Swiss/elimination) vs the 1v1 final: the live fixes,
+      // boost and pacing apply only at big tables.
+      const big = view.opponents.length + 1 >= p.paceSeats;
+      let mean = -m.shift + (big ? p.boost : 0) + p.heavy * (VALUES[L]! - 1);
       for (let i = 0; i < m.coef.length; i++) mean += m.coef[i]! * x[i]!;
       if (!p.raw) {
         if (p.target > 0 && view.opponents.length + 1 >= p.paceSeats) {
@@ -98,6 +111,22 @@ export function createClone(lex: Lexicon, rng: () => number, model: string, over
         if (view.opponents.length + 1 < p.paceSeats) mean += p.boostSmall;
         if (p.spendK > 0 && view.bagTotal < p.spendN) mean += (p.spendK * view.balance) / (view.bagTotal + 1);
         if (p.fitOnly && gain === 0 && size >= 6) mean = Math.min(mean, 4);
+        const v = VALUES[L]!;
+        const useful = gain > 0 || size < p.floorRack;
+        if (big && p.floor > 0 && v <= p.floorMaxVal && useful) mean = Math.max(mean, p.floor + p.floorSlope * (v - 1));
+        if (big && p.heavyCap > 0 && v >= 5 && gain === 0) mean = Math.min(mean, p.heavyCap);
+        if (big && p.lateBag > 0 && view.bagTotal <= p.lateBag) {
+          // Late: coins are about to be worthless and a 7 is out of reach
+          // from a short rack, so build short words and spend everything.
+          const r0 = lex.topWords(rack, 1, 2)[0]?.reward ?? 0;
+          rack[L]!++;
+          const r1 = lex.topWords(rack, 1, 2)[0]?.reward ?? 0;
+          rack[L]!--;
+          if (r1 > r0 || size < 4) {
+            const share = view.balance / Math.max(1, view.bagTotal / p.lateEvery);
+            mean = Math.max(mean, Math.min(share, view.balance));
+          }
+        }
       }
       const bid = Math.round(mean + (p.raw ? m.sd * gaussian(rng) : 0));
       this.lastNote = `mean=${mean.toFixed(1)} gain=${gain} b1=${b1}`;
@@ -111,6 +140,11 @@ export function createClone(lex: Lexicon, rng: () => number, model: string, over
       const top = lex.topWords(view.rack, 1, 3)[0];
       if (!top) return [];
       if (top.word.length >= p.minLen || view.balance < p.cashBal) return [top.word];
+      if (p.lateCash && p.lateBag > 0 && view.bagTotal <= p.lateBag && top.word.length >= p.lateMin) {
+        // Late: unless one more tile could make it a 7, cash it now so the
+        // coins buy the next short word.
+        if (view.rack.reduce((a, c) => a + c, 0) < 6 || view.bagTotal < 3) return [top.word];
+      }
       return [];
     },
   };
