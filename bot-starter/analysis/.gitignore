@@ -1,3 +1,3 @@
-analysis/*.pkl
-analysis/*.log
-analysis/imit_try.json
+*.pkl
+*.log
+imit_try.json
