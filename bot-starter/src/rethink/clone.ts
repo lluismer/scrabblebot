@@ -47,6 +47,7 @@ export interface CloneParams {
   floorSlope: number;
   floorMaxVal: number;
   floorRack: number; // "useful": adds length, or the rack has fewer tiles than this
+  floorDup: number; // 1 = a short rack makes any letter useful; 0 = only letters the rack doesn't hold yet
   heavyCap: number; // most we bid on a 5+ point letter that adds no length (0 = off)
   lateBag: number; // with this many tiles left or fewer: short words (0 = off) ...
   lateMin: number; // ... cash any word this long, and spend the balance over the auctions left
@@ -56,7 +57,7 @@ export interface CloneParams {
 }
 
 const DEFAULTS: CloneParams = { raw: 0, endAll: 4, minLen: 7, cashBal: 20, boost: 0, heavy: 0, target: 0, pace: 2, spendK: 0, spendN: 12, fitOnly: 0, paceSeats: 4, boostSmall: 0,
-  floor: 0, floorSlope: 2, floorMaxVal: 4, floorRack: 7, heavyCap: 0, lateBag: 0, lateMin: 3, lateEvery: 4, lateCash: 0 };
+  floor: 0, floorSlope: 2, floorMaxVal: 4, floorRack: 7, floorDup: 1, heavyCap: 0, lateBag: 0, lateMin: 3, lateEvery: 4, lateCash: 0 };
 
 function gaussian(rng: () => number): number {
   const u = Math.max(rng(), 1e-12);
@@ -112,7 +113,7 @@ export function createClone(lex: Lexicon, rng: () => number, model: string, over
         if (p.spendK > 0 && view.bagTotal < p.spendN) mean += (p.spendK * view.balance) / (view.bagTotal + 1);
         if (p.fitOnly && gain === 0 && size >= 6) mean = Math.min(mean, 4);
         const v = VALUES[L]!;
-        const useful = gain > 0 || size < p.floorRack;
+        const useful = gain > 0 || (size < p.floorRack && (p.floorDup > 0 || rack[L]! === 0));
         if (big && p.floor > 0 && v <= p.floorMaxVal && useful) mean = Math.max(mean, p.floor + p.floorSlope * (v - 1));
         if (big && p.heavyCap > 0 && v >= 5 && gain === 0) mean = Math.min(mean, p.heavyCap);
         if (big && p.lateBag > 0 && view.bagTotal <= p.lateBag) {
