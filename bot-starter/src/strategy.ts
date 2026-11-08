@@ -4,6 +4,7 @@
 import { StrategyC, type Brain } from "./engine/brains.js";
 import type { Lexicon } from "./engine/lexicon.js";
 import { DEFAULT_PARAMS, type Params } from "./engine/planner.js";
+import { RushBrain, rushParamsFromEnv } from "./rush/rush.js";
 
 export { LETTER_VALUE } from "./engine/values.js";
 
@@ -45,6 +46,12 @@ export const LIVE_PARAMS: Params = {
 };
 
 export function createBrain(lex: Lexicon): Brain {
+  // BRAIN=rush runs the 7-letter rush experiment (src/rush/rush.ts) instead.
+  if (process.env.BRAIN === "rush") {
+    const p = rushParamsFromEnv();
+    console.log(`rush settings: ${Object.entries(p).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    return new RushBrain(lex, p);
+  }
   console.log(
     `strategy C settings: ${Object.entries(LIVE_PARAMS)
       .filter(([k]) => !/Ms$|Samples$/.test(k))

@@ -60,6 +60,11 @@ export class Lexicon {
     return this.words.has(word);
   }
 
+  // Every word in the list, upper case.
+  allWords(): Iterable<string> {
+    return this.words;
+  }
+
   private insert(w: string) {
     let node = 0;
     for (let i = 0; i < w.length; i++) {
