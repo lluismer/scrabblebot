@@ -65,6 +65,7 @@ export interface RushParams {
   payback: number; // share of a completed word's reward we'll bid for the tile that completes it
   endgame: number; // with this many tiles or fewer left in the bag, bid the whole balance
   picky: number; // most we bid on a letter no lead target lacks (and that completes nothing)
+  pickyDv: number; // ...when its ΔV is below this (999 = always)
   lateBag: number; // with this many tiles or fewer left, cash a 6 when no 7 is one tile away (0 = off)
 }
 
@@ -83,6 +84,7 @@ export const RUSH_DEFAULTS: RushParams = {
   payback: 0.8,
   endgame: 4,
   picky: 8,
+  pickyDv: 999, // sim (300 paired): 999 → place 2.88, 8 → 3.11
   lateBag: 20,
 };
 
@@ -234,7 +236,10 @@ export class RushBrain implements Brain {
     if (needed && VALUES[x]! <= 2 && rackSize(view.rack) < p.shortRack) want = Math.max(want, p.cheapBid);
     // Picky: coins are what limit us to ~3 words a match, so don't pay the
     // market for a letter none of the lead targets is missing.
-    if (!needed && completes === 0) want = Math.min(want, p.picky);
+    // "Needed" only looks at today's lead targets, so a letter that opens a
+    // better one (live: Z at ΔV 24, K and R at ΔV 12) would be clipped too;
+    // ΔV ≥ pickyDv is reason enough to pay.
+    if (!needed && completes === 0 && dv < p.pickyDv) want = Math.min(want, p.picky);
 
     let cap: number;
     let why: string;
@@ -245,7 +250,11 @@ export class RushBrain implements Brain {
     } else {
       // The share cap alone deadlocks (at 33 coins it allows 11, the market
       // clears at ~13), hence minBid; the reserve stops minBid draining us.
-      const spendable = Math.max(0, view.balance - p.reserve);
+      // The reserve is only for the tile that finishes a 7, so it applies
+      // only while one tile would. Otherwise it deadlocks too: live, rack
+      // AAAET at 16 coins left cap = 2 for the last 25 auctions.
+      const keep = this.oneAway(view) ? p.reserve : 0;
+      const spendable = Math.max(0, view.balance - keep);
       cap = Math.min(spendable, Math.max(p.minBid, Math.floor(view.balance * p.cap)));
       why = `cap=${cap}`;
       // Below the reserve, still take a tile nobody else wants (pays 1).
